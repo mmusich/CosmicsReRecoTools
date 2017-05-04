@@ -99,7 +99,7 @@ class Job:
         fout=open(os.path.join(self.cfg_dir,self.outputCfgName),'w+b')
 
         ## Reco + TkAlCosmics0T AlCa Stream 
-        template_cfg_file = os.path.join(self.the_dir,"step1_RAW2DIGI_RECO_ALCA.py")
+        template_cfg_file = os.path.join(self.the_dir,"CosmicsReRecoTools","step1_RAW2DIGI_RECO_ALCA.py")
         
         fin = open(template_cfg_file)
 
