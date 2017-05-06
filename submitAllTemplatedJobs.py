@@ -238,7 +238,7 @@ def main():
         if 'True' in applyEXTRACOND[0]:
             if "|" in value:
                 bunch            = value.split('|')
-                extraCondVect    = [[bunch[0].split(','),bunch[1].split(',')]]
+                extraCondVect    = [[item.split(',') for item in bunch]]
             else:
                 extraCondVect    = [[value.split(',')]]
         else:
