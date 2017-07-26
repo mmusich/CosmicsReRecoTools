@@ -99,7 +99,7 @@ class Job:
         fout=open(os.path.join(self.cfg_dir,self.outputCfgName),'w+b')
 
         ## Reco + TkAlCosmics0T AlCa Stream 
-        template_cfg_file = os.path.join(self.the_dir,"step1_RAW2DIGI_RECO_ALCA.py")
+        template_cfg_file = os.path.join(self.the_dir,"CosmicsReRecoTools","step1_RAW2DIGI_RECO_ALCA.py")
         
         fin = open(template_cfg_file)
 
@@ -160,8 +160,8 @@ class Job:
         fout.write("cd $LXBATCH_DIR \n") 
         fout.write("cmsRun "+os.path.join(self.cfg_dir,self.outputCfgName)+" \n")
         fout.write("ls -lh . \n")
-        fout.write("for RootOutputFile in $(ls *root |grep myTest ); do cmsStage -f ${RootOutputFile}  ${OUT_DIR}/${RootOutputFile} ; done \n")
-        fout.write("for TxtOutputFile in $(ls *txt ); do cmsStage -f ${TxtOutputFile}  ${OUT_DIR}/${TxtOutputFile} ; done \n")
+        fout.write("for RootOutputFile in $(ls *root |grep myTest ); do xrdcp -f ${RootOutputFile}  ${OUT_DIR}/${RootOutputFile} ; done \n")
+        fout.write("for TxtOutputFile in $(ls *txt ); do xrdcp -f ${TxtOutputFile}  ${OUT_DIR}/${TxtOutputFile} ; done \n")
 
         fout.close()
 
@@ -206,7 +206,7 @@ def main():
     t+=opts.taskname
     
     USER = os.environ.get('USER')
-    eosdir=os.path.join("/store/group/alca_trackeralign/",USER,"test_out",t)
+    eosdir=os.path.join("/eos/cms/store/group/alca_trackeralign/",USER,"test_out",t)
     if(opts.submit):
         mkdir_eos(eosdir)
 
@@ -238,7 +238,7 @@ def main():
         if 'True' in applyEXTRACOND[0]:
             if "|" in value:
                 bunch            = value.split('|')
-                extraCondVect    = [[bunch[0].split(','),bunch[1].split(',')]]
+                extraCondVect    = [[item.split(',') for item in bunch]] 
             else:
                 extraCondVect    = [[value.split(',')]]
         else:
@@ -287,7 +287,7 @@ def main():
             aJob.createTheCfgFile(theSrcFiles)
             aJob.createTheLSFFile()
 
-            output_file_list1.append("cmsStage "+aJob.getOutputFileName()+" . \n")
+            output_file_list1.append("xrdcp "+aJob.getOutputFileName()+" . \n")
             if jobN == 0:
                 output_file_list2.append(aJob.getOutputBaseName()+".root ")
             output_file_list2.append(os.path.split(aJob.getOutputFileName())[1]+" ")    
