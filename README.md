@@ -1,11 +1,12 @@
 # CosmicsReRecoTools
 
 ```
-cmsrel CMSSW_9_0_2
-cd CMSSW_9_0_2/src
+cmsrel CMSSW_11_1_0_pre6
+cd CMSSW_11_1_0_pre6/src
 cmsenv
 git cms-init # if you want to merge some CMSSW changes
-git clone git@github.com:ghellwig/CosmicsReRecoTools.git --branch cruzet-2017-BPIX-Rereco
+git cms-merge-topic mmusich:rehaulCDC
+git clone git@github.com:mmusich/CosmicsReRecoTools.git --branch CDCReReco
 cd CosmicsReRecoTools
-./submitAllTemplatedJobs.py -i testReReco_CRUZET2017_ML3andAPE.ini -j CRUZET_ReReco -s
+python submitAllTemplatedJobs.py -i ReRecoForCDC.ini -j Nominal -s
 ```
