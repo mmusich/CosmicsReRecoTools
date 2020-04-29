@@ -7,6 +7,56 @@ import subprocess
 import ConfigParser, json
 from optparse import OptionParser
 
+##############################################
+def getCommandOutput(command):
+##############################################
+    """This function executes `command` and returns it output.
+    Arguments:
+    - `command`: Shell command to be invoked by this function.
+    """
+    child = os.popen(command)
+    data = child.read()
+    err = child.close()
+    if err:
+        print('%s failed w/ exit code %d' % (command, err))
+    return data
+
+##############################################
+def write_HTCondor_submit_file(path, name, nruns, proxy_path=None):
+##############################################
+    """Writes 'job.submit' file in `path`.
+    Arguments:
+    - `path`: job directory
+    - `script`: script to be executed
+    - `proxy_path`: path to proxy (only used in case of requested proxy forward)
+    """
+        
+    job_submit_template="""\
+universe              = vanilla
+executable            = {script:s}
+output                = {jobm:s}/{out:s}.out
+error                 = {jobm:s}/{out:s}.err
+log                   = {jobm:s}/{out:s}.log
+transfer_output_files = ""
++JobFlavour           = "{flavour:s}"
+queue {njobs:s}
+"""
+    if proxy_path is not None:
+        job_submit_template += """\
++x509userproxy        = "{proxy:s}"
+"""
+        
+    job_submit_file = os.path.join(path, "job_"+name+".submit")
+    with open(job_submit_file, "w") as f:
+        f.write(job_submit_template.format(script = os.path.join(path,name+"_$(ProcId).sh"),
+                                           out  = name+"_$(ProcId)",
+                                           jobm = os.path.abspath(path),
+                                           flavour = "tomorrow",
+                                           njobs = str(nruns),
+                                           proxy = proxy_path))
+
+    return job_submit_file
+
 ##### method to parse the input file ################################
 
 def ConfigSectionMap(config, section):
@@ -54,8 +104,9 @@ def split(sequence, size):
 class Job:
 #############
 
-    def __init__(self, job_id, job_name, applyEXTRACOND, extraCondVect, CMSSW_dir ,the_dir):
+    def __init__(self, job_number, job_id, job_name, applyEXTRACOND, extraCondVect, CMSSW_dir ,the_dir):
 ###############################
+        self.job_number= job_number
         self.job_id=job_id          
         self.job_name=job_name
         self.applyEXTRACOND    = applyEXTRACOND
@@ -65,13 +116,16 @@ class Job:
         self.CMSSW_dir=CMSSW_dir
 
         self.output_full_name=self.getOutputBaseName()+"_"+str(self.job_id)
+        self.output_number_name=self.getOutputBaseName()+"_"+str(self.job_number)
 
         self.cfg_dir=None
         self.outputCfgName=None
         
         # LSF variables        
         self.LSF_dir=None
+        self.BASH_dir=None
         self.output_LSF_name=None
+        self.output_BASH_name=None
 
         self.lfn_list=list()      
 
@@ -87,6 +141,10 @@ class Job:
 ########################    
         return "myTest_"+self.job_name
         
+    def getOutputBaseNameWithData(self):
+########################    
+        return "myTest_"+self.job_name+"_"+self.data
+
     def createTheCfgFile(self,lfn):
 ###############################
         
@@ -165,6 +223,48 @@ class Job:
 
         fout.close()
 
+    def createTheBashFile(self):
+###############################
+
+       # directory to store the BASH to be submitted
+        self.BASH_dir = os.path.join(self.the_dir,"BASH")
+        if not os.path.exists(self.BASH_dir):
+            os.makedirs(self.BASH_dir)
+
+        self.output_BASH_name=self.output_number_name+".sh"
+        fout=open(os.path.join(self.BASH_dir,self.output_BASH_name),'w')
+    
+        job_name = self.output_full_name
+
+        log_dir = os.path.join(self.the_dir,"log")
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+
+        fout.write("#!/bin/bash \n")
+        #fout.write("export EOS_MGM_URL=root://eoscms.cern.ch \n")
+        fout.write("JobName="+job_name+" \n")
+        fout.write("export X509_USER_PROXY="+os.path.join(self.CMSSW_dir,"src")+"/.user_proxy \n")
+        fout.write("echo  \"Job started at \" `date` \n")
+        fout.write("CMSSW_DIR="+os.path.join(self.CMSSW_dir,"src")+" \n")
+        fout.write("OUT_DIR="+self.OUTDIR+" \n")
+        fout.write("LXBATCH_DIR=$PWD \n") 
+        #fout.write("cd "+os.path.join(self.CMSSW_dir,"src")+" \n")
+        fout.write("cd ${CMSSW_DIR} \n")
+        fout.write("eval `scramv1 runtime -sh` \n")
+        fout.write("echo \"batch dir: $LXBATCH_DIR release: $CMSSW_DIR release base: $CMSSW_RELEASE_BASE\" \n") 
+        fout.write("cd $LXBATCH_DIR \n") 
+        fout.write("cp "+os.path.join(self.cfg_dir,self.outputCfgName)+" . \n")
+        fout.write("echo \"cmsRun "+self.outputCfgName+"\" \n")
+        fout.write("cmsRun "+self.outputCfgName+" \n")
+        fout.write("echo \"Content of working dir is \"`ls -lh` \n")
+        #fout.write("less condor_exec.exe \n")
+        fout.write("for RootOutputFile in $(ls *root ); do xrdcp -f ${RootOutputFile} root://eoscms//eos/cms${OUT_DIR}/${RootOutputFile} ; done \n")
+        #fout.write("mv ${JobName}.out ${CMSSW_DIR}/BASH \n")
+        fout.write("echo  \"Job ended at \" `date` \n")
+        fout.write("exit 0 \n")
+
+        fout.close()
+
     def getOutputFileName(self):
 ############################################
         return os.path.join(self.OUTDIR,self.output_full_name+".root")
@@ -202,7 +302,7 @@ def main():
 
     now = datetime.datetime.now()
     #t = now.strftime("test_%Y_%m_%d_%H_%M_%S_DATA_ReReco_")
-    t = "test_CRUZET17_DATA_ReReco_"
+    t = "test_CDC_ReReco_"
     t+=opts.taskname
     
     USER = os.environ.get('USER')
@@ -278,23 +378,39 @@ def main():
         output_file_list1=list()      
         output_file_list2=list()
         output_file_list2.append("hadd ")
-            
+
+        totalJobs=0          
+        theBashDir=None
+        theBaseName=None
+
         for jobN,theSrcFiles in enumerate(split(srcFiles[iConf],1)):
             #print jobN
-            aJob = Job(jobN,jobName[iConf], applyEXTRACOND[iConf],extraCondVect[iConf],input_CMSSW_BASE,AnalysisStep_dir)
+
+            totalJobs=totalJobs+1
+            aJob = Job(jobN,jobN,jobName[iConf], applyEXTRACOND[iConf],extraCondVect[iConf],input_CMSSW_BASE,AnalysisStep_dir)
             
             aJob.setEOSout(eosdir)
             aJob.createTheCfgFile(theSrcFiles)
-            aJob.createTheLSFFile()
+            aJob.createTheBashFile()
 
             output_file_list1.append("xrdcp "+aJob.getOutputFileName()+" . \n")
+
             if jobN == 0:
+                theBashDir=aJob.BASH_dir
+                theBaseName=aJob.getOutputBaseName()
                 output_file_list2.append(aJob.getOutputBaseName()+".root ")
             output_file_list2.append(os.path.split(aJob.getOutputFileName())[1]+" ")    
    
-            if opts.submit:
-                aJob.submit()
             del aJob
+
+        job_submit_file = write_HTCondor_submit_file(theBashDir,theBaseName,totalJobs,None)
+        #os.path.join(self.CMSSW_dir,"src/.user_proxy"))
+
+        if opts.submit:
+            os.system("chmod u+x "+theBashDir+"/*.sh")
+            submissionCommand = "condor_submit "+job_submit_file
+            submissionOutput = getCommandOutput(submissionCommand)
+            print(submissionOutput)
 
         fout.writelines(output_file_list1)
         fout.writelines(output_file_list2)
