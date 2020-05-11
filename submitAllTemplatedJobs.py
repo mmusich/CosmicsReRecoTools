@@ -8,6 +8,34 @@ import ConfigParser, json
 from optparse import OptionParser
 
 ##############################################
+def check_proxy():
+##############################################
+    """Check if GRID proxy has been initialized."""
+
+    try:
+        with open(os.devnull, "w") as dump:
+            subprocess.check_call(["voms-proxy-info", "--exists"],
+                                  stdout = dump, stderr = dump)
+    except subprocess.CalledProcessError:
+        return False
+    return True
+
+##############################################
+def forward_proxy(rundir):
+##############################################
+    """Forward proxy to location visible from the batch system.
+    Arguments:
+    - `rundir`: directory for storing the forwarded proxy
+    """
+
+    if not check_proxy():
+        print("Please create proxy via 'voms-proxy-init -voms cms -rfc'.")
+        sys.exit(1)
+
+    local_proxy = subprocess.check_output(["voms-proxy-info", "--path"]).strip()
+    shutil.copyfile(local_proxy, os.path.join(rundir,".user_proxy"))
+
+##############################################
 def getCommandOutput(command):
 ##############################################
     """This function executes `command` and returns it output.
@@ -72,24 +100,28 @@ def ConfigSectionMap(config, section):
             the_dict[option] = None
     return the_dict
 
-###### method to create recursively directories on EOS #############
 
+###### method to create recursively directories on EOS #############
 def mkdir_eos(out_path):
+    print("creating",out_path)
     newpath='/'
     for dir in out_path.split('/'):
         newpath=os.path.join(newpath,dir)
         # do not issue mkdir from very top of the tree
         if newpath.find('test_out') > 0:
-            p = subprocess.Popen(["cmsMkdir",newpath], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            command="/afs/cern.ch/project/eos/installation/cms/bin/eos.select mkdir "+newpath
+            p = subprocess.Popen(command,shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             (out, err) = p.communicate()
+            #print(out,err)
             p.wait()
 
     # now check that the directory exists
-    p = subprocess.Popen(["cmsLs",out_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    command2="/afs/cern.ch/project/eos/installation/cms/bin/eos.select ls "+out_path
+    p = subprocess.Popen(command2,shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (out, err) = p.communicate()
     p.wait()
     if p.returncode !=0:
-        print out
+        print(out)
 
 def split(sequence, size):
 ##########################    
@@ -258,7 +290,7 @@ class Job:
         fout.write("cmsRun "+self.outputCfgName+" \n")
         fout.write("echo \"Content of working dir is \"`ls -lh` \n")
         #fout.write("less condor_exec.exe \n")
-        fout.write("for RootOutputFile in $(ls *root ); do xrdcp -f ${RootOutputFile} root://eoscms//eos/cms${OUT_DIR}/${RootOutputFile} ; done \n")
+        fout.write("for RootOutputFile in $(ls *root ); do xrdcp -f ${RootOutputFile} root://eoscms/${OUT_DIR}/${RootOutputFile} ; done \n")
         #fout.write("mv ${JobName}.out ${CMSSW_DIR}/BASH \n")
         fout.write("echo  \"Job ended at \" `date` \n")
         fout.write("exit 0 \n")
@@ -287,6 +319,9 @@ def main():
     AnalysisStep_dir = os.path.join(input_CMSSW_BASE,"src")
     lib_path = os.path.abspath(AnalysisStep_dir)
     sys.path.append(lib_path)
+
+    ## check first there is a valid grid proxy
+    forward_proxy(AnalysisStep_dir)
 
     ## N.B.: this is dediced here once and for all
     #from sources_cff import CosmicsSrc
