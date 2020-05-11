@@ -112,6 +112,19 @@ process.ALCARECOEventContent.outputCommands.extend(process.OutALCARECOTkAlCosmic
 from Configuration.AlCa.GlobalTag import GlobalTag
 process.GlobalTag = GlobalTag(process.GlobalTag, '111X_dataRun2_v2', '')
 
+#TEST1:
+#process.cosmicDCSeeds.cut = cms.string("pt > 2 && abs(eta)<1.6 && phi<0")
+#process.cosmicDCSeeds.maxEtaForTOB = 1.8
+#process.cosmicDCSeeds.minEtaForTEC = 0.7
+#TEST10 :
+#process.cosmicDCSeeds.cut = cms.string("p > 3 && abs(eta)<1.6 && phi<0")
+#process.cosmicDCSeeds.maxEtaForTOB = 1.8
+#process.cosmicDCSeeds.minEtaForTEC = 0.7
+#TEST11:
+process.cosmicDCSeeds.cut = cms.string("p > 3 && abs(eta)<1.6 && phi<0")
+process.cosmicDCSeeds.maxEtaForTOB = 1.8
+process.cosmicDCSeeds.minEtaForTEC = 0.0
+
 # Path and EndPath definitions
 process.raw2digi_step = cms.Path(process.RawToDigi)
 process.reconstruction_step = cms.Path(process.reconstructionCosmics)
